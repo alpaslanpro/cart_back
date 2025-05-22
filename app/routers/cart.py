@@ -14,13 +14,16 @@ router = APIRouter()
 @router.post("/", response_model=CartResponse, status_code=status.HTTP_201_CREATED)
 async def create_new_cart(cart: CartCreate, response: Response):
     """POST /api/v1/carts - Создать новую корзину"""
-    new_cart = await create_cart(cart)
-    if not new_cart:
-        raise HTTPException(status_code=400, detail="Failed to create cart")
-    
-    # Add Location header with cart URL
-    response.headers["Location"] = f"/api/v1/carts/{new_cart.id}"
-    return new_cart
+    try:
+        new_cart = await create_cart(cart)
+        if not new_cart:
+            raise HTTPException(status_code=400, detail="Failed to create cart")
+        
+        # Add Location header with cart URL
+        response.headers["Location"] = f"/api/v1/carts/{new_cart.id}"
+        return new_cart
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/", response_model=List[CartResponse])
 async def get_all_carts_endpoint():
@@ -39,10 +42,13 @@ async def get_cart_by_id(cart_id: str):
 @router.post("/{cart_id}/items", response_model=CartResponse)
 async def add_item_to_cart_endpoint(cart_id: str, item: CartItem):
     """POST /api/v1/carts/{cartId}/items - Добавить товар в корзину"""
-    updated_cart = await add_item_to_cart_or_create(cart_id, item)
-    if not updated_cart:
-        raise HTTPException(status_code=400, detail="Failed to add item to cart")
-    return updated_cart
+    try:
+        updated_cart = await add_item_to_cart_or_create(cart_id, item)
+        if not updated_cart:
+            raise HTTPException(status_code=400, detail="Failed to add item to cart")
+        return updated_cart
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.put("/{cart_id}/items/{item_id}", response_model=CartResponse)
 async def update_cart_item(cart_id: str, item_id: str, item_update: ItemUpdate):

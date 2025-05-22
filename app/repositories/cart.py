@@ -3,10 +3,52 @@
 from typing import List, Optional
 from app.db.mongo import get_db
 from app.models.cart import CartModel
-from app.schemas.cart import CartCreate, CartItem
+from app.schemas.cart import CartCreate, CartItem, CartItemWithDetails
 from bson import ObjectId
 
 CART_COLLECTION = "carts"
+PRODUCT_COLLECTION = "products"
+
+async def get_product_details(product_id: str) -> Optional[dict]:
+    """Get product details by ID"""
+    if not ObjectId.is_valid(product_id):
+        return None
+    db = get_db()
+    product = await db[PRODUCT_COLLECTION].find_one({"_id": ObjectId(product_id)})
+    if product:
+        product["_id"] = str(product["_id"])
+    return product
+
+async def enrich_cart_items(items: List[dict]) -> tuple[List[CartItemWithDetails], float]:
+    """Enrich cart items with product details and calculate total"""
+    enriched_items = []
+    total_amount = 0.0
+    
+    for item in items:
+        product = await get_product_details(item["product_id"])
+        if product:
+            item_total = product["price"] * item["quantity"]
+            enriched_item = CartItemWithDetails(
+                product_id=item["product_id"],
+                product_name=product["name"],
+                quantity=item["quantity"],
+                price=product["price"],
+                total_price=item_total
+            )
+            enriched_items.append(enriched_item)
+            total_amount += item_total
+        else:
+            # Product not found, include item with minimal info
+            enriched_item = CartItemWithDetails(
+                product_id=item["product_id"],
+                product_name="Product Not Found",
+                quantity=item["quantity"],
+                price=0.0,
+                total_price=0.0
+            )
+            enriched_items.append(enriched_item)
+    
+    return enriched_items, total_amount
 
 async def create_cart(cart_data: CartCreate) -> CartModel:
     db = get_db()
@@ -17,7 +59,14 @@ async def create_cart(cart_data: CartCreate) -> CartModel:
     # Convert ObjectId to string for Pydantic model
     cart["_id"] = str(cart["_id"])
     
-    return CartModel(**cart)
+    # Enrich items with product details and calculate total
+    enriched_items, total_amount = await enrich_cart_items(cart.get("items", []))
+    
+    return CartModel(
+        id=cart["_id"],
+        items=enriched_items,
+        total_amount=total_amount
+    )
 
 async def get_cart(cart_id: str) -> Optional[CartModel]:
     if not ObjectId.is_valid(cart_id):
@@ -27,7 +76,15 @@ async def get_cart(cart_id: str) -> Optional[CartModel]:
     if cart:
         # Convert ObjectId to string for Pydantic model
         cart["_id"] = str(cart["_id"])
-        return CartModel(**cart)
+        
+        # Enrich items with product details and calculate total
+        enriched_items, total_amount = await enrich_cart_items(cart.get("items", []))
+        
+        return CartModel(
+            id=cart["_id"],
+            items=enriched_items,
+            total_amount=total_amount
+        )
     return None
 
 async def get_all_carts() -> List[CartModel]:
@@ -37,12 +94,27 @@ async def get_all_carts() -> List[CartModel]:
     async for cart in carts_cursor:
         # Convert ObjectId to string for Pydantic model
         cart["_id"] = str(cart["_id"])
-        carts.append(CartModel(**cart))
+        
+        # Enrich items with product details and calculate total
+        enriched_items, total_amount = await enrich_cart_items(cart.get("items", []))
+        
+        cart_model = CartModel(
+            id=cart["_id"],
+            items=enriched_items,
+            total_amount=total_amount
+        )
+        carts.append(cart_model)
     return carts
 
 async def add_item_to_cart(cart_id: str, item: CartItem) -> Optional[CartModel]:
     if not ObjectId.is_valid(cart_id):
         return None
+    
+    # Verify product exists
+    product = await get_product_details(item.product_id)
+    if not product:
+        return None
+        
     db = get_db()
     # Convert product_id to string for comparison
     product_id_str = str(item.product_id)
@@ -64,12 +136,25 @@ async def add_item_to_cart(cart_id: str, item: CartItem) -> Optional[CartModel]:
     if updated_cart:
         # Convert ObjectId to string for Pydantic model
         updated_cart["_id"] = str(updated_cart["_id"])
-        return CartModel(**updated_cart)
+        
+        # Enrich items with product details and calculate total
+        enriched_items, total_amount = await enrich_cart_items(updated_cart.get("items", []))
+        
+        return CartModel(
+            id=updated_cart["_id"],
+            items=enriched_items,
+            total_amount=total_amount
+        )
     return None
 
 async def add_item_to_cart_or_create(cart_id: str, item: CartItem) -> CartModel:
     """Add item to cart, create cart if it doesn't exist"""
     db = get_db()
+    
+    # Verify product exists
+    product = await get_product_details(item.product_id)
+    if not product:
+        raise ValueError(f"Product {item.product_id} not found")
     
     if ObjectId.is_valid(cart_id):
         # Try to add to existing cart
@@ -96,7 +181,15 @@ async def update_item_quantity(cart_id: str, item_id: str, quantity: int) -> Opt
     if updated_cart:
         # Convert ObjectId to string for Pydantic model
         updated_cart["_id"] = str(updated_cart["_id"])
-        return CartModel(**updated_cart)
+        
+        # Enrich items with product details and calculate total
+        enriched_items, total_amount = await enrich_cart_items(updated_cart.get("items", []))
+        
+        return CartModel(
+            id=updated_cart["_id"],
+            items=enriched_items,
+            total_amount=total_amount
+        )
     return None
 
 async def remove_item_from_cart(cart_id: str, item_id: str) -> Optional[CartModel]:
@@ -111,7 +204,15 @@ async def remove_item_from_cart(cart_id: str, item_id: str) -> Optional[CartMode
     if updated_cart:
         # Convert ObjectId to string for Pydantic model
         updated_cart["_id"] = str(updated_cart["_id"])
-        return CartModel(**updated_cart)
+        
+        # Enrich items with product details and calculate total
+        enriched_items, total_amount = await enrich_cart_items(updated_cart.get("items", []))
+        
+        return CartModel(
+            id=updated_cart["_id"],
+            items=enriched_items,
+            total_amount=total_amount
+        )
     return None
 
 async def clear_cart(cart_id: str) -> Optional[CartModel]:
@@ -126,7 +227,12 @@ async def clear_cart(cart_id: str) -> Optional[CartModel]:
     if updated_cart:
         # Convert ObjectId to string for Pydantic model
         updated_cart["_id"] = str(updated_cart["_id"])
-        return CartModel(**updated_cart)
+        
+        return CartModel(
+            id=updated_cart["_id"],
+            items=[],
+            total_amount=0.0
+        )
     return None
 
 async def checkout_cart(cart_id: str) -> Optional[dict]:
@@ -138,19 +244,14 @@ async def checkout_cart(cart_id: str) -> Optional[dict]:
     if not cart:
         return None
     
-    # Calculate total
-    total = 0
-    for item in cart.get("items", []):
-        # In real implementation, you'd fetch product price from products collection
-        # For now, assuming items have price field or default price
-        item_price = item.get("price", 0)  # This should come from product lookup
-        total += item_price * item.get("quantity", 0)
+    # Enrich items and calculate total
+    enriched_items, total_amount = await enrich_cart_items(cart.get("items", []))
     
     # Create order summary
     order_summary = {
         "cart_id": str(cart["_id"]),
-        "items": cart.get("items", []),
-        "total_amount": total,
+        "items": [item.model_dump() for item in enriched_items],
+        "total_amount": total_amount,
         "status": "processed"
     }
     

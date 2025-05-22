@@ -16,7 +16,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Korzina Cart API", 
-    version="0.1.0",
+    version="1.0.0",
     lifespan=lifespan
 )
 
