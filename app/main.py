@@ -20,7 +20,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-app.include_router(cart.router, prefix="/api/v1/cart", tags=["Cart"])
+app.include_router(cart.router, prefix="/api/v1/carts", tags=["Cart"])
 app.include_router(product.router, prefix="/api/v1/products", tags=["Products"])
 
 @app.get("/")
