@@ -1,0 +1,21 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env
+
+# VSCode
+.vscode/
+
+# Mongo DB volume (if using a named volume and saving locally)
+mongo_data/
+
+# macOS/Linux system files
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
