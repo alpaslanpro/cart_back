@@ -1,3 +1,6 @@
+# app/main.py
+
+
 from fastapi import FastAPI
 from app.core.config import settings
 from app.db.mongo import connect_to_mongo, close_mongo_connection
