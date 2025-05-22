@@ -9,5 +9,13 @@ class ProductCreate(BaseModel):
     price: float = Field(..., gt=0, example=1299.99)
     in_stock: int = Field(..., ge=0, example=10)
 
-class ProductResponse(ProductCreate):
-    id: str = Field(..., example="665dd299f2f5b3f3e99f8ef4")
+class ProductResponse(BaseModel):
+    id: str = Field(..., alias="_id", description="Product ID as string")
+    name: str
+    description: Optional[str] = None
+    price: float
+    in_stock: int
+
+    class Config:
+        populate_by_name = True
+        allow_population_by_field_name = True
