@@ -8,7 +8,7 @@ A RESTful API for managing shopping carts built with FastAPI and MongoDB. The AP
 - **Product Integration**: Automatic product name and price lookup
 - **Real-time Calculations**: Automatic total price calculation based on product prices and quantities
 - **Comprehensive CRUD**: Full cart and item management operations
-- **Checkout Process**: Complete order processing with detailed summaries
+- **Checkout Process**: Complete order processing with detailed summaries and automatic cart deletion
 - **Administrative Tools**: List all carts for management purposes
 
 ## Technology Stack
@@ -47,18 +47,6 @@ source venv/bin/activate
 ```
 
 ### 3. Install Dependencies
-
-Create a `requirements.txt` file with the following content:
-
-```txt
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-motor==3.3.2
-pydantic==2.5.0
-pydantic-settings==2.1.0
-python-dotenv==1.0.0
-pymongo==4.6.0
-```
 
 Install the dependencies:
 
@@ -166,6 +154,13 @@ GET /api/v1/products/
 GET /api/v1/products/{product_id}
 ```
 
+#### Delete Product
+```http
+DELETE /api/v1/products/{product_id}
+```
+
+**Response:** `204 No Content`
+
 ### Cart Endpoints
 
 #### 1. Create New Cart
@@ -231,12 +226,21 @@ Content-Type: application/json
 DELETE /api/v1/carts/{cart_id}/items/{item_id}
 ```
 
-#### 6. Clear Cart
+#### 6. Clear Cart (Remove all items but keep cart)
+```http
+DELETE /api/v1/carts/{cart_id}/clear
+```
+
+**Response:** Returns the cleared cart with empty items array
+
+#### 7. Delete Cart (Remove cart completely)
 ```http
 DELETE /api/v1/carts/{cart_id}
 ```
 
-#### 7. Checkout Cart
+**Response:** `204 No Content`
+
+#### 8. Checkout Cart
 ```http
 POST /api/v1/carts/{cart_id}/checkout
 Content-Type: application/json
@@ -262,7 +266,9 @@ Content-Type: application/json
 }
 ```
 
-#### 8. Get All Carts (Administrative)
+**Note:** The cart is automatically deleted after successful checkout.
+
+#### 9. Get All Carts (Administrative)
 ```http
 GET /api/v1/carts/
 ```
@@ -335,19 +341,51 @@ curl -X POST "http://localhost:8000/api/v1/carts/{cart_id}/items" \
   }'
 ```
 
-4. **Checkout:**
+4. **Checkout (automatically deletes cart):**
 ```bash
 curl -X POST "http://localhost:8000/api/v1/carts/{cart_id}/checkout" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
 
+5. **Delete a product:**
+```bash
+curl -X DELETE "http://localhost:8000/api/v1/products/{product_id}"
+```
+
+6. **Delete a cart manually:**
+```bash
+curl -X DELETE "http://localhost:8000/api/v1/carts/{cart_id}"
+```
+
+## Cart vs Clear Cart Operations
+
+The API provides two different operations for cart cleanup:
+
+### Clear Cart (`DELETE /api/v1/carts/{cart_id}/clear`)
+- Removes all items from the cart
+- Keeps the cart itself (cart ID remains valid)
+- Returns the empty cart object
+- Use this when you want to empty the cart but keep it for future use
+
+### Delete Cart (`DELETE /api/v1/carts/{cart_id}`)
+- Completely removes the cart from the database
+- Cart ID becomes invalid after this operation
+- Returns `204 No Content`
+- Use this when you want to permanently remove the cart
+
+### Checkout Behavior
+- The checkout operation automatically **deletes** the cart after processing
+- This means the cart ID becomes invalid after checkout
+- If you need to preserve the cart after checkout, modify the `checkout_cart` function in `repositories/cart.py`
+
 ## Error Handling
 
 The API returns appropriate HTTP status codes:
 
-- `200 OK`: Successful GET, PUT, DELETE operations
+- `200 OK`: Successful GET, PUT operations
 - `201 Created`: Successful POST operations
+- `204 No Content`: Successful DELETE operations
 - `400 Bad Request`: Invalid request data or product not found
 - `404 Not Found`: Resource not found
 - `500 Internal Server Error`: Server errors
@@ -363,6 +401,12 @@ The API returns appropriate HTTP status codes:
 ```json
 {
   "detail": "Cart not found"
+}
+```
+
+```json
+{
+  "detail": "Cart or item not found"
 }
 ```
 
@@ -449,6 +493,38 @@ Run with:
 docker-compose up -d
 ```
 
+## API Changes Summary
+
+### New Endpoints Added:
+
+1. **DELETE /api/v1/carts/{cart_id}** - Delete cart completely
+   - Returns `204 No Content`
+   - Permanently removes the cart from database
+
+2. **DELETE /api/v1/products/{product_id}** - Delete product
+   - Returns `204 No Content`
+   - Permanently removes the product from database
+
+### Modified Endpoints:
+
+1. **DELETE /api/v1/carts/{cart_id}/clear** - Clear cart (renamed from previous DELETE /api/v1/carts/{cart_id})
+   - Now specifically clears items but keeps the cart
+   - Returns the empty cart object
+
+2. **POST /api/v1/carts/{cart_id}/checkout** - Checkout cart
+   - Now automatically deletes the cart after successful checkout
+   - Cart ID becomes invalid after checkout
+
+### Repository Functions Added:
+
+- `delete_cart(cart_id: str) -> bool` in `repositories/cart.py`
+- `delete_product(product_id: str) -> bool` in `repositories/product.py`
+
+### Repository Functions Modified:
+
+- `clear_cart(cart_id: str)` - Now only clears items, doesn't delete cart
+- `checkout_cart(cart_id: str)` - Now deletes cart after processing
+
 ## Contributing
 
 1. Fork the repository
@@ -469,7 +545,14 @@ For support and questions:
 
 ## Changelog
 
-### Version 0.1.0
+### Version 1.1.0
+- Added delete cart endpoint (`DELETE /api/v1/carts/{cart_id}`)
+- Added delete product endpoint (`DELETE /api/v1/products/{product_id}`)
+- Modified checkout to automatically delete cart after processing
+- Renamed clear cart endpoint to `/api/v1/carts/{cart_id}/clear`
+- Improved error handling and response codes
+
+### Version 1.0.0
 - Initial release
 - Basic cart and product management
 - Automatic price calculation

@@ -1,5 +1,7 @@
+# app/schemas/cart.py
+
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List
 
 class CartItem(BaseModel):
     product_id: str = Field(..., description="Product ID as string", alias="productId")

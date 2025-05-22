@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from app.schemas.cart import CartCreate, CartResponse, CartItem, ItemUpdate, CheckoutResponse
 from app.repositories.cart import (
     create_cart, get_cart, get_all_carts, add_item_to_cart_or_create,
-    update_item_quantity, remove_item_from_cart, clear_cart, checkout_cart
+    update_item_quantity, remove_item_from_cart, clear_cart, checkout_cart, delete_cart
 )
 from typing import List
 
@@ -66,17 +66,25 @@ async def remove_item_from_cart_endpoint(cart_id: str, item_id: str):
         raise HTTPException(status_code=404, detail="Cart or item not found")
     return updated_cart
 
-@router.delete("/{cart_id}", response_model=CartResponse)
+@router.delete("/{cart_id}/clear", response_model=CartResponse)
 async def clear_cart_endpoint(cart_id: str):
-    """DELETE /api/v1/carts/{cartId} - Очистить корзину"""
+    """DELETE /api/v1/carts/{cartId}/clear - Очистить корзину (оставить корзину, удалить только товары)"""
     cleared_cart = await clear_cart(cart_id)
     if not cleared_cart:
         raise HTTPException(status_code=404, detail="Cart not found")
     return cleared_cart
 
+@router.delete("/{cart_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_cart_endpoint(cart_id: str):
+    """DELETE /api/v1/carts/{cartId} - Удалить корзину полностью"""
+    success = await delete_cart(cart_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Cart not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
 @router.post("/{cart_id}/checkout", response_model=CheckoutResponse)
 async def checkout_cart_endpoint(cart_id: str):
-    """POST /api/v1/carts/{cartId}/checkout - Оформить заказ"""
+    """POST /api/v1/carts/{cartId}/checkout - Оформить заказ (корзина будет удалена после оформления)"""
     order_summary = await checkout_cart(cart_id)
     if not order_summary:
         raise HTTPException(status_code=404, detail="Cart not found")

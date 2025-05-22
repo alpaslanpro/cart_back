@@ -216,13 +216,17 @@ async def remove_item_from_cart(cart_id: str, item_id: str) -> Optional[CartMode
     return None
 
 async def clear_cart(cart_id: str) -> Optional[CartModel]:
+    """Clear all items from cart but keep the cart"""
     if not ObjectId.is_valid(cart_id):
         return None
     db = get_db()
-    await db[CART_COLLECTION].update_one(
+    result = await db[CART_COLLECTION].update_one(
         {"_id": ObjectId(cart_id)},
         {"$set": {"items": []}}
     )
+    if result.matched_count == 0:
+        return None
+    
     updated_cart = await db[CART_COLLECTION].find_one({"_id": ObjectId(cart_id)})
     if updated_cart:
         # Convert ObjectId to string for Pydantic model
@@ -235,8 +239,16 @@ async def clear_cart(cart_id: str) -> Optional[CartModel]:
         )
     return None
 
+async def delete_cart(cart_id: str) -> bool:
+    """Delete cart completely"""
+    if not ObjectId.is_valid(cart_id):
+        return False
+    db = get_db()
+    result = await db[CART_COLLECTION].delete_one({"_id": ObjectId(cart_id)})
+    return result.deleted_count > 0
+
 async def checkout_cart(cart_id: str) -> Optional[dict]:
-    """Process cart checkout - returns order summary"""
+    """Process cart checkout - returns order summary and deletes the cart"""
     if not ObjectId.is_valid(cart_id):
         return None
     db = get_db()
@@ -255,7 +267,7 @@ async def checkout_cart(cart_id: str) -> Optional[dict]:
         "status": "processed"
     }
     
-    # Optionally clear cart after checkout
-    await clear_cart(cart_id)
+    # Delete cart after checkout
+    await delete_cart(cart_id)
     
     return order_summary
